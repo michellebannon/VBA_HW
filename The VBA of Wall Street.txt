@@ -1,0 +1,199 @@
+Sub WallStreet()
+
+    Dim temp_ticker As String
+    Dim tickerArray() As Variant    'multi-dim array to hold ticker names for outputing
+    Dim i As Integer
+    Dim range1 As Range
+    Dim tradedate As Range
+    Dim stockopen As Range
+    Dim stockclose As Range
+    Dim stockvolume As Range
+    Dim TotalView() As Variant
+    Dim wsheets As String
+    Dim LastRowofOutput As Integer
+    Dim PercentChange As Variant
+    Dim YearlyChange As Variant
+    Dim FirstPass As Boolean
+   
+   
+    'Change the "wsheets" variable to point to the worksheet to run against
+    wsheets = "2014"
+    Worksheets(wsheets).Activate
+   
+    'determine how many rows containing ticker values
+    LastRow = Sheets(wsheets).Cells(Sheets(wsheets).Rows.Count, 1).End(xlUp).Row
+   
+    'Sort existing data, routine found on www.wallstreetmojo.com
+    'sorting data from cell A1 to G's last row
+    Range("A1:G" & LastRow).Sort key1:=Range("A1"), order1:=xlAscending, key2:=Range("B1"), order2:=xlAscending, Header:=xlYes
+   
+   'this sets the range of what we will read for ticker data
+    Set range1 = Sheets(wsheets).Range("A2:A" & LastRow)
+       
+    i = 1       ' i will be used to determine array position
+    ReDim tickerArray(1)
+    For Each ticker In range1
+        If (StrComp(temp_ticker, ticker.Value, vbTextCompare) <> 0) Then 'if not a match, then new ticker
+           temp_ticker = ticker.Value
+           tickerArray(i) = ticker.Value
+           i = i + 1
+           ReDim Preserve tickerArray(i)
+        End If
+    Next
+    Debug.Print i - 1 'print how many tickers there are
+    LastRowofOutput = i  'use this variable for finding the high, low % and volumne data
+   
+    'set variable to total count of stock tickers
+    LastTicker = UBound(tickerArray)
+    'dimension a multi-dim array to hold the data read from the input data
+    'Ticker, Open, Close, Total Volume
+    ReDim TotalView(LastTicker, 4)
+   
+    J = 2   'loop counter offset by starting row number
+    'loop through the list of tickers and grab values and drop them into TotalView array
+    For i = 1 To LastTicker
+        TotalView(i, 0) = tickerArray(i)    'set first array element to name of stock
+        TotalView(i, 2) = 1000000           'initialize stock lowest close to arbitrary high number
+        TotalVolume = 0                     'initialize TotalVolume
+        FirstPass = True                    'set to indicate first reading of ticker data
+        TempDate = 0                        'initialize starting date
+       
+        For Each ticker In range1
+            If StrComp(tickerArray(i), ticker.Value, vbTextCompare) = 0 Then
+                Set tradedate = Range("B" & (J))
+                Set stockopen = Range("C" & (J))
+                Set stockclose = Range("F" & (J))
+                TotalView(i, 2) = stockclose
+
+                If (FirstPass = True) Then
+                    If (stockopen <> 0) Then        'check to see if open price is valid,not zero. if it is keep looking for new open
+                        TotalView(i, 1) = stockopen     'set initial values of high/low stock price
+                        TotalView(i, 2) = stockclose
+                        FirstPass = False           'reset pass indicator
+                    End If
+                End If
+
+                If (tradedate >= TempDate) Then
+                    'if tradedate is greater than TempDate, then not the last day of trading, update closing stock price
+                    TotalView(i, 2) = stockclose
+                Else
+                   'if tradedate is less than current TempDate then record contains newer opening stock price
+                    TotalView(i, 1) = stockopen
+                End If
+                TempDate = tradedate
+               
+                'Add cumalative total of stock volume
+                Set stockvolume = Range("G" & (J)) '
+
+                TotalVolume = stockvolume.Value + TotalVolume
+                J = J + 1    'bump counter for next iteration
+             End If
+        Next
+ 
+        TotalView(i, 3) = TotalVolume
+'       Print J to see where index for the start of a new stock ticker begins
+'        Debug.Print J
+    Next
+       
+   'Write the heading for the output page
+   
+   Range("J1").Value = "Ticker"
+   Range("K1").Value = "Yearly Change"
+   Range("L1").Value = "Percent Change"
+   Range("M1").Value = "Total Stock Volume"
+   
+   
+   'Loop through array and write values to cells to build table
+    For i = 1 To UBound(tickerArray) - 1
+        Range("J" & i + 1) = TotalView(i, 0)        'write stock name
+   
+        YearlyChange = (TotalView(i, 2) - TotalView(i, 1))      'calculate Yearly dollar Change for positive change
+        Range("K" & i + 1) = YearlyChange
+        If (YearlyChange > 0) Then
+             Range("K" & i + 1).Interior.ColorIndex = 4
+        Else
+            Range("K" & i + 1).Interior.ColorIndex = 3
+        End If
+        Range("K" & i + 1).NumberFormat = "0.00"
+           
+        'Check if stock open price is 0. This is an invalid open price.
+        If Not (TotalView(i, 1) = 0) Then
+            PercentChange = (YearlyChange / TotalView(i, 1) * 100)        'calculate positive Percent Change based from open price
+        Else
+            PercentChange = 0
+        End If
+   
+        Range("L" & i + 1) = PercentChange / 100
+        Range("L" & i + 1).NumberFormat = "0.00%"  'changes it to %
+        Range("M" & i + 1) = TotalView(i, 3)        'write total trade volume
+   
+   'have to figure out how to pull the Greatest % Increase, Greatest % Decreas, Ticker and Greatest Volume"
+ 
+  'If "Yearly Change" > 0 then
+   
+    Next
+ HighLowVolume (LastRowofOutput)
+     
+End Sub
+
+Sub HighLowVolume(LastRowofOutput As Integer)
+
+Dim greatest(3, 2) ' this sets the size of the array that we will use for the values HighLowVolume
+Dim tempticker As String
+Dim tempchange
+Dim HiRange
+Dim LoRange
+Dim tempHi
+Dim TempLo
+Dim HiVol
+Dim TempVol
+
+
+tempHi = 0
+TempLo = 0
+HiVol = 0
+
+'write headers
+Range("P1") = "Ticker"
+Range("Q1") = "Value"
+Range("O2") = "Greatest % Increase"
+Range("O3") = "Greatest % Decrease"
+Range("O4") = "Greatest Total Volume"
+
+'Check for high perchange change
+For i = 2 To LastRowofOutput
+    HiRange = Range("L" & i)
+    If (HiRange > tempHi) Then
+        tempHi = HiRange
+        tempticker = Range("J" & i)
+    End If
+    Range("P2") = tempticker
+    Range("Q2") = tempHi
+    Range("Q2").NumberFormat = "0.00%"  'changes it to %
+Next
+
+'Check for low perchange change
+For i = 2 To LastRowofOutput
+    LoRange = Range("L" & i)
+    If (LoRange < TempLo) Then
+        TempLo = LoRange
+        tempticker = Range("J" & i)
+    End If
+    Range("P3") = tempticker
+    Range("Q3") = TempLo
+    Range("Q3").NumberFormat = "0.00%"  'changes it to %
+Next
+
+'Check for Highest Volume
+For i = 2 To LastRowofOutput
+    HiVol = Range("M" & i)
+    If (HiVol > TempVol) Then
+        TempVol = HiVol
+        tempticker = Range("J" & i)
+    End If
+    Range("P4") = tempticker
+    Range("Q4") = TempVol
+   
+Next
+
+End Sub
